@@ -9,6 +9,7 @@ __all__ = [
     "format_result_summary",
     "measure_prediction_quality",
     "prepare_diabetes_dataset",
+    "run_workflow",
     "summarize_results",
     "train_regression_model",
 ]
@@ -27,6 +28,7 @@ def __getattr__(name: str):
             format_result_summary,
             measure_prediction_quality,
             prepare_diabetes_dataset,
+            run_workflow,
             summarize_results,
             train_regression_model,
         )
@@ -40,6 +42,7 @@ def __getattr__(name: str):
             "format_result_summary": format_result_summary,
             "measure_prediction_quality": measure_prediction_quality,
             "prepare_diabetes_dataset": prepare_diabetes_dataset,
+            "run_workflow": run_workflow,
             "summarize_results": summarize_results,
             "train_regression_model": train_regression_model,
         }[name]

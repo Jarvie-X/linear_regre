@@ -184,6 +184,24 @@ def format_result_summary(summary: ResultSummary) -> str:
     return "\n".join(lines)
 
 
+def run_workflow() -> ResultSummary:
+    """Run the complete input-free Diabetes regression workflow.
+
+    This is the single orchestration entry point used by the command-line
+    demonstration.  Keeping the stages together makes it straightforward to
+    repeat the same load, train, evaluate, and present sequence without
+    customer data or an external connection.
+    """
+
+    prepared = prepare_diabetes_dataset()
+    trained = train_regression_model(prepared)
+    quality = measure_prediction_quality(trained)
+    summary = summarize_results(prepared, trained, quality)
+    if len(summary.samples) < 5:
+        raise ValueError("Workflow summary must include at least five examples")
+    return summary
+
+
 def measure_prediction_quality(trained: TrainedRegression) -> PredictionQuality:
     """Measure predictions against actual outcomes in the held-out set.
 
@@ -294,10 +312,7 @@ def prepare_diabetes_dataset(
 def main() -> None:
     """Run the input-free preparation and training workflow."""
 
-    prepared = prepare_diabetes_dataset()
-    trained = train_regression_model(prepared)
-    quality = measure_prediction_quality(trained)
-    print(format_result_summary(summarize_results(prepared, trained, quality)))
+    print(format_result_summary(run_workflow()))
 
 
 if __name__ == "__main__":
