@@ -1,6 +1,12 @@
 import numpy as np
 
-from linear_regre.diabetes import prepare_diabetes_dataset, train_regression_model
+from linear_regre.diabetes import (
+    PredictionQuality,
+    TrainedRegression,
+    measure_prediction_quality,
+    prepare_diabetes_dataset,
+    train_regression_model,
+)
 
 
 def test_dataset_is_split_into_learning_and_evaluation_groups():
@@ -42,3 +48,30 @@ def test_training_is_repeatable_without_customer_input():
     second = train_regression_model(prepared)
 
     np.testing.assert_array_equal(first.predictions, second.predictions)
+
+
+def test_prediction_quality_uses_held_out_predictions_and_actual_outcomes():
+    trained = TrainedRegression(
+        model=None,
+        predictions=np.array([2.0, 4.0, 8.0]),
+        evaluation_targets=np.array([1.0, 5.0, 7.0]),
+    )
+
+    quality = measure_prediction_quality(trained)
+
+    assert isinstance(quality, PredictionQuality)
+    assert quality.mae == 1.0
+    assert quality.mse == 1.0
+    assert quality.rmse == 1.0
+    assert quality.r2 == 0.8392857142857143
+
+
+def test_prediction_quality_rejects_invalid_evaluation_data():
+    with np.testing.assert_raises(ValueError):
+        measure_prediction_quality(
+            TrainedRegression(model=None, predictions=np.array([]), evaluation_targets=np.array([]))
+        )
+    with np.testing.assert_raises(ValueError):
+        measure_prediction_quality(
+            TrainedRegression(model=None, predictions=np.array([1.0]), evaluation_targets=np.array([1.0, 2.0]))
+        )
