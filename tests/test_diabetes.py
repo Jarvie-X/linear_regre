@@ -3,8 +3,10 @@ import numpy as np
 from linear_regre.diabetes import (
     PredictionQuality,
     TrainedRegression,
+    format_result_summary,
     measure_prediction_quality,
     prepare_diabetes_dataset,
+    summarize_results,
     train_regression_model,
 )
 
@@ -75,3 +77,31 @@ def test_prediction_quality_rejects_invalid_evaluation_data():
         measure_prediction_quality(
             TrainedRegression(model=None, predictions=np.array([1.0]), evaluation_targets=np.array([1.0, 2.0]))
         )
+
+
+def test_result_summary_presents_samples_measures_interpretation_and_disclaimer():
+    prepared = prepare_diabetes_dataset()
+    trained = train_regression_model(prepared)
+    summary = summarize_results(prepared, trained, measure_prediction_quality(trained))
+
+    output = format_result_summary(summary)
+
+    assert len(summary.samples) >= 5
+    assert output.count("   ") >= 5
+    assert "Loaded Diabetes dataset successfully" in output
+    assert "MAE" in output and "MSE" in output and "RMSE" in output and "R²" in output
+    assert "In plain language" in output
+    assert "teaching and demonstration" in output
+    assert "not for automated decision-making" in output
+
+
+def test_result_summary_rejects_mismatched_evaluation_data():
+    prepared = prepare_diabetes_dataset()
+    trained = TrainedRegression(
+        model=None,
+        predictions=np.array([1.0]),
+        evaluation_targets=np.array([1.0]),
+    )
+
+    with np.testing.assert_raises(ValueError):
+        summarize_results(prepared, trained, PredictionQuality(0, 0, 0, 0))
