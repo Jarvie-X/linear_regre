@@ -45,6 +45,77 @@ class TrainedRegression:
         return len(self.predictions)
 
 
+@dataclass(frozen=True)
+class PredictionQuality:
+    """Numeric quality measures calculated on held-out predictions."""
+
+    mean_absolute_error: float
+    mean_squared_error: float
+    root_mean_squared_error: float
+    r_squared: float
+
+    @property
+    def mae(self) -> float:
+        """Return mean absolute error (MAE)."""
+
+        return self.mean_absolute_error
+
+    @property
+    def mse(self) -> float:
+        """Return mean squared error (MSE)."""
+
+        return self.mean_squared_error
+
+    @property
+    def rmse(self) -> float:
+        """Return root mean squared error (RMSE)."""
+
+        return self.root_mean_squared_error
+
+    @property
+    def r2(self) -> float:
+        """Return the coefficient of determination (R²)."""
+
+        return self.r_squared
+
+
+def measure_prediction_quality(trained: TrainedRegression) -> PredictionQuality:
+    """Measure predictions against actual outcomes in the held-out set.
+
+    The calculation intentionally reads only the evaluation predictions and
+    targets.  Learning examples and the fitted model are not used, preventing
+    training performance from being reported as evaluation performance.
+    """
+
+    predictions = np.asarray(trained.predictions, dtype=float)
+    actual = np.asarray(trained.evaluation_targets, dtype=float)
+    if predictions.ndim != 1 or actual.ndim != 1:
+        raise ValueError("Evaluation predictions and targets must be one-dimensional")
+    if len(predictions) == 0:
+        raise ValueError("Evaluation predictions and targets must not be empty")
+    if len(predictions) != len(actual):
+        raise ValueError("Evaluation predictions and targets do not match")
+    if not np.isfinite(predictions).all() or not np.isfinite(actual).all():
+        raise ValueError("Evaluation predictions and targets must be finite")
+
+    errors = predictions - actual
+    mean_squared_error = float(np.mean(errors**2))
+    total_sum_of_squares = float(np.sum((actual - np.mean(actual)) ** 2))
+    # R² is conventionally zero when the evaluation targets are constant and
+    # the predictions are not exact, matching a useful baseline interpretation.
+    r_squared = (
+        1.0 - float(np.sum(errors**2)) / total_sum_of_squares
+        if total_sum_of_squares > 0
+        else (1.0 if np.allclose(predictions, actual) else 0.0)
+    )
+    return PredictionQuality(
+        mean_absolute_error=float(np.mean(np.abs(errors))),
+        mean_squared_error=mean_squared_error,
+        root_mean_squared_error=float(np.sqrt(mean_squared_error)),
+        r_squared=float(r_squared),
+    )
+
+
 def train_regression_model(dataset: DiabetesDataset) -> TrainedRegression:
     """Fit a linear regression model and predict every evaluation example."""
 
@@ -120,6 +191,7 @@ def main() -> None:
 
     prepared = prepare_diabetes_dataset()
     trained = train_regression_model(prepared)
+    quality = measure_prediction_quality(trained)
     print("Loaded Diabetes dataset successfully")
     print(
         f"Prepared {prepared.source_examples} examples: "
@@ -127,6 +199,13 @@ def main() -> None:
         f"{prepared.evaluation_examples} held-out evaluation"
     )
     print(f"Trained linear regression and produced {trained.evaluation_examples} predictions")
+    print(
+        "Held-out prediction quality: "
+        f"MAE={quality.mae:.3f}, "
+        f"MSE={quality.mse:.3f}, "
+        f"RMSE={quality.rmse:.3f}, "
+        f"R²={quality.r2:.3f}"
+    )
 
 
 if __name__ == "__main__":
