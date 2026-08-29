@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 from sklearn.datasets import load_diabetes
+from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 
 
@@ -27,6 +28,53 @@ class DiabetesDataset:
     @property
     def evaluation_examples(self) -> int:
         return len(self.y_evaluation)
+
+
+@dataclass(frozen=True)
+class TrainedRegression:
+    """A fitted model and its predictions for the held-out examples."""
+
+    model: LinearRegression
+    predictions: np.ndarray
+    evaluation_targets: Any
+
+    @property
+    def evaluation_examples(self) -> int:
+        """Return the number of held-out examples that were predicted."""
+
+        return len(self.predictions)
+
+
+def train_regression_model(dataset: DiabetesDataset) -> TrainedRegression:
+    """Fit a linear regression model and predict every evaluation example."""
+
+    X_learning = np.asarray(dataset.X_learning)
+    y_learning = np.asarray(dataset.y_learning)
+    X_evaluation = np.asarray(dataset.X_evaluation)
+    y_evaluation = np.asarray(dataset.y_evaluation)
+
+    if X_learning.ndim != 2 or X_evaluation.ndim != 2:
+        raise ValueError("Learning and evaluation features must be two-dimensional")
+    if y_learning.ndim != 1 or y_evaluation.ndim != 1:
+        raise ValueError("Learning and evaluation targets must be one-dimensional")
+    if len(X_learning) != len(y_learning):
+        raise ValueError("Learning features and targets do not match")
+    if len(X_evaluation) != len(y_evaluation):
+        raise ValueError("Evaluation features and targets do not match")
+    if len(X_learning) == 0 or len(X_evaluation) == 0:
+        raise ValueError("Learning and evaluation examples must not be empty")
+
+    model = LinearRegression()
+    model.fit(X_learning, y_learning)
+    predictions = np.asarray(model.predict(X_evaluation))
+    if predictions.shape != y_evaluation.shape:
+        raise ValueError("Model did not produce one prediction per evaluation example")
+
+    return TrainedRegression(
+        model=model,
+        predictions=predictions,
+        evaluation_targets=y_evaluation,
+    )
 
 
 def prepare_diabetes_dataset(
@@ -68,15 +116,17 @@ def prepare_diabetes_dataset(
 
 
 def main() -> None:
-    """Run the input-free preparation workflow and report its outcome."""
+    """Run the input-free preparation and training workflow."""
 
     prepared = prepare_diabetes_dataset()
+    trained = train_regression_model(prepared)
     print("Loaded Diabetes dataset successfully")
     print(
         f"Prepared {prepared.source_examples} examples: "
         f"{prepared.learning_examples} learning, "
         f"{prepared.evaluation_examples} held-out evaluation"
     )
+    print(f"Trained linear regression and produced {trained.evaluation_examples} predictions")
 
 
 if __name__ == "__main__":
