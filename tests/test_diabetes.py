@@ -6,6 +6,7 @@ from linear_regre.diabetes import (
     format_result_summary,
     measure_prediction_quality,
     prepare_diabetes_dataset,
+    run_workflow,
     summarize_results,
     train_regression_model,
 )
@@ -105,3 +106,12 @@ def test_result_summary_rejects_mismatched_evaluation_data():
 
     with np.testing.assert_raises(ValueError):
         summarize_results(prepared, trained, PredictionQuality(0, 0, 0, 0))
+
+
+def test_complete_workflow_returns_reviewable_summary_repeatedly():
+    first = run_workflow()
+    second = run_workflow()
+
+    assert len(first.samples) >= 5
+    assert len(second.samples) >= 5
+    assert format_result_summary(first) == format_result_summary(second)
