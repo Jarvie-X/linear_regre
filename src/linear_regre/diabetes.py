@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Tuple
 
 import numpy as np
 from sklearn.datasets import load_diabetes
@@ -77,6 +77,111 @@ class PredictionQuality:
         """Return the coefficient of determination (R²)."""
 
         return self.r_squared
+
+
+@dataclass(frozen=True)
+class PredictionExample:
+    """One held-out prediction shown in the learner-facing summary."""
+
+    prediction: float
+    actual: float
+
+
+@dataclass(frozen=True)
+class ResultSummary:
+    """The complete, presentation-ready result of one evaluation run."""
+
+    source_examples: int
+    learning_examples: int
+    evaluation_examples: int
+    quality: PredictionQuality
+    samples: Tuple[PredictionExample, ...]
+
+
+def summarize_results(
+    dataset: DiabetesDataset,
+    trained: TrainedRegression,
+    quality: PredictionQuality,
+    *,
+    sample_count: int = 5,
+) -> ResultSummary:
+    """Build a concise summary from the held-out evaluation results.
+
+    The sample rows deliberately come from the evaluation set, rather than
+    from the examples used to fit the model.  Keeping this check here prevents
+    the presentation from accidentally mixing training and evaluation data.
+    """
+
+    if sample_count < 1:
+        raise ValueError("sample_count must be at least 1")
+    predictions = np.asarray(trained.predictions, dtype=float)
+    actual = np.asarray(trained.evaluation_targets, dtype=float)
+    if predictions.ndim != 1 or actual.ndim != 1:
+        raise ValueError("Evaluation predictions and targets must be one-dimensional")
+    if len(predictions) != dataset.evaluation_examples or len(actual) != dataset.evaluation_examples:
+        raise ValueError("Summary inputs do not describe the same evaluation set")
+    if len(predictions) == 0:
+        raise ValueError("Summary requires at least one evaluation example")
+    if not np.isfinite(predictions).all() or not np.isfinite(actual).all():
+        raise ValueError("Summary predictions and actual outcomes must be finite")
+
+    samples = tuple(
+        PredictionExample(float(prediction), float(outcome))
+        for prediction, outcome in zip(predictions[:sample_count], actual[:sample_count])
+    )
+    return ResultSummary(
+        source_examples=dataset.source_examples,
+        learning_examples=dataset.learning_examples,
+        evaluation_examples=dataset.evaluation_examples,
+        quality=quality,
+        samples=samples,
+    )
+
+
+def format_result_summary(summary: ResultSummary) -> str:
+    """Render a result summary for a non-technical reader."""
+
+    quality = summary.quality
+    if quality.r2 >= 0.5:
+        interpretation = "The model captures a useful part of the pattern, although its estimates are not exact."
+    elif quality.r2 >= 0:
+        interpretation = "The model captures some of the pattern, but its estimates can differ noticeably from reality."
+    else:
+        interpretation = "The model does not explain this held-out set well, so its estimates should be treated cautiously."
+
+    lines = [
+        "RESULT SUMMARY (held-out evaluation)",
+        "Loaded Diabetes dataset successfully.",
+        (
+            f"The dataset contains {summary.source_examples} examples: "
+            f"{summary.learning_examples} used for learning and "
+            f"{summary.evaluation_examples} held out for an honest check."
+        ),
+        "",
+        "Sample predictions compared with actual outcomes:",
+        "  #   Predicted   Actual",
+    ]
+    lines.extend(
+        f"  {index:>1}   {sample.prediction:>9.1f}   {sample.actual:>6.1f}"
+        for index, sample in enumerate(summary.samples, start=1)
+    )
+    lines.extend(
+        [
+            "",
+            f"Key evaluation results (across {summary.evaluation_examples} held-out examples):",
+            f"  Mean absolute error (MAE): {quality.mae:.3f}",
+            f"  Mean squared error (MSE): {quality.mse:.3f}",
+            f"  Root mean squared error (RMSE): {quality.rmse:.3f}",
+            f"  R-squared (R²): {quality.r2:.3f}",
+            "",
+            (
+                f"In plain language: predictions miss the actual outcome by about "
+                f"{quality.mae:.1f} units on average. {interpretation}"
+            ),
+            "For teaching and demonstration only; this result is not for automated decision-making.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def measure_prediction_quality(trained: TrainedRegression) -> PredictionQuality:
@@ -192,20 +297,7 @@ def main() -> None:
     prepared = prepare_diabetes_dataset()
     trained = train_regression_model(prepared)
     quality = measure_prediction_quality(trained)
-    print("Loaded Diabetes dataset successfully")
-    print(
-        f"Prepared {prepared.source_examples} examples: "
-        f"{prepared.learning_examples} learning, "
-        f"{prepared.evaluation_examples} held-out evaluation"
-    )
-    print(f"Trained linear regression and produced {trained.evaluation_examples} predictions")
-    print(
-        "Held-out prediction quality: "
-        f"MAE={quality.mae:.3f}, "
-        f"MSE={quality.mse:.3f}, "
-        f"RMSE={quality.rmse:.3f}, "
-        f"R²={quality.r2:.3f}"
-    )
+    print(format_result_summary(summarize_results(prepared, trained, quality)))
 
 
 if __name__ == "__main__":
